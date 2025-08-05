@@ -1,9 +1,10 @@
 package edu.polytechnique.cedar.spark.benchmark.config
 
 case class RunTemplateGenericConfig(
-    queryLocation: String = null,
+    queryPath: String = null,
     databaseName: String = null, // tpch_100, tpcds_100, job
-    queryName: String = null,
+    benchmarkId: String = null, //snowflake, ceb, etc ...
+    queryId: String = null,
     templateName: String = null,
     traceCollectionPath: String = null,
     localDebug: Boolean = false,

@@ -1,6 +1,6 @@
 package edu.polytechnique.cedar.spark.benchmark
 
-import edu.polytechnique.cedar.spark.benchmark.config.RunTemplateQueryConfig
+import edu.polytechnique.cedar.spark.benchmark.config.RunTemplateGenericConfig
 import edu.polytechnique.cedar.spark.collector.UdaoCollector
 import edu.polytechnique.cedar.spark.listeners.UDAOSparkListener
 import edu.polytechnique.cedar.spark.sql.extensions.{
@@ -13,38 +13,33 @@ import org.apache.spark.sql.SparkSession
 import java.io.PrintWriter
 import java.io.File
 
-object RunTemplateQueryForRuntime {
+object RunTemplateGeneric {
 
   def main(args: Array[String]): Unit = {
     val parser =
-      new scopt.OptionParser[RunTemplateQueryConfig]("Run-Benchmark-Query") {
-        opt[String]('b', "benchmark")
-          .action { (x, c) => c.copy(benchmarkName = x) }
-          .text("the name of the benchmark to run")
+      new scopt.OptionParser[RunTemplateGenericConfig]("Run-Benchmark-Query") {
+        opt[String]('d', "databaseName")
+          .action { (x, c) => c.copy(databaseName = x) }
+          .text("The database in spark to load. Can be tpcds_100, job, etc...")
           .required()
         opt[String]('t', "templateName")
           .action { (x, c) => c.copy(templateName = x) }
           .text("the templateName to run")
           .required()
-        opt[String]('q', "queryName")
-          .action { (x, c) => c.copy(queryName = x) }
-          .text("the queryName to run")
+        opt[String]('b', "benchmarkId")
+          .action { (x,c) => c.copy(benchmarkId = x)}
+          .text("Benchmark name: ceb, snowflake, llm")
           .required()
-        opt[String]('s', "scaleFactor")
-          .action((x, c) => c.copy(scaleFactor = x))
-          .text(
-            "scaleFactor defines the size of the dataset to generate (in GB)"
-          )
+        opt[String]('q', "queryId")
+          .action { (x, c) => c.copy(queryId = x) }
+          .text("the queryId to run")
           .required()
-        opt[String]('l', "queryLocationHeader")
-          .action((x, c) => c.copy(queryLocationHeader = x))
+        opt[String]('p', "queryPath")
+          .action((x, c) => c.copy(queryPath = x))
           .text("head root directory of all queries")
-        opt[String]('n', "databaseName")
-          .action((x, c) => c.copy(databaseName = x))
-          .text("customized databaseName")
-        opt[String]('x', "extractedPath")
-          .action((x, c) => c.copy(extractedPath = x))
-          .text("customized path for the extracted traces")
+        opt[String]('x', "traceCollectionPath")
+          .action((x, c) => c.copy(traceCollectionPath = x))
+          .text("customized path for the collected traces")
           .required()
         opt[String]('d', "localDebug")
           .action((x, c) => c.copy(localDebug = x.toBoolean))
@@ -62,7 +57,7 @@ object RunTemplateQueryForRuntime {
           .text("prints this usage text")
       }
 
-    parser.parse(args, RunTemplateQueryConfig()) match {
+    parser.parse(args, RunTemplateGenericConfig()) match {
       case Some(config) =>
         run(config)
       case None =>
@@ -70,11 +65,10 @@ object RunTemplateQueryForRuntime {
     }
   }
 
-  def run(config: RunTemplateQueryConfig): Unit = {
-    assert(config.benchmarkName == "tpch" || config.benchmarkName.startsWith("tpcds"))
-    val tid: String = config.templateName
-    val qid: String = config.queryName
-    val collector = new UdaoCollector(config.verbose, tid)
+  def run(config: RunTemplateGenericConfig): Unit = {
+    val templateId: String = config.templateName
+    val queryId: String = config.queryId
+    val collector = new UdaoCollector(config.verbose, templateId)
     val udaoClient: Option[UdaoClient] =
       if (config.enableRuntimeSolver)
         Some(new UdaoClient(config.runtimeSolverHost, config.runtimeSolverPort))
@@ -84,7 +78,7 @@ object RunTemplateQueryForRuntime {
       SparkSession
         .builder()
         .appName(
-          s"${config.benchmarkName}_${config.templateName}-${config.queryName}"
+          s"${config.benchmarkId}_${config.templateName}-${config.queryId}"
         )
         .config("spark.master", "local[*]")
         .config("spark.default.parallelism", "40")
@@ -132,33 +126,28 @@ object RunTemplateQueryForRuntime {
 
     spark.sparkContext.addSparkListener(UDAOSparkListener(collector))
 
-    val databaseName =
-      if (config.databaseName == null)
-        s"${config.benchmarkName.split("-")(0)}_${config.scaleFactor}"
-      else config.databaseName
-    val queryLocationHeader: String = config.queryLocationHeader
+    val databaseName = config.databaseName
+    val queryPath: String = config.queryPath
 
     spark.sql(s"use $databaseName")
-    val source = scala.io.Source.fromFile(
-      s"${queryLocationHeader}/${tid}/${tid}-${qid}.sql"
-    )
+    val source = scala.io.Source.fromFile(queryPath)
     val queryContent: String =
       try source.mkString
       finally source.close()
 
     println(spark.sparkContext.applicationId)
-    println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
+    // println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
 
-    println(s"run ${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
+    println(s"run ${queryPath}")
     collector.onCompile(spark, queryContent)
     spark.sql(queryContent).collect()
     spark.close()
 
-    val xFile = new File(config.extractedPath)
+    val xFile = new File(config.traceCollectionPath)
     xFile.mkdirs()
 
     val writer = new PrintWriter(
-      s"${config.extractedPath}/${spark.sparkContext.appName}_${spark.sparkContext.applicationId}.json"
+      s"${config.traceCollectionPath}/${spark.sparkContext.appName}_${spark.sparkContext.applicationId}.json"
     )
     val jsonString = collector.dump2String
     writer.write(jsonString)
