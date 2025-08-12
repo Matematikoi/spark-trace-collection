@@ -26,6 +26,7 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.json4s.JsonAST
 import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods.{pretty, render}
+import netscape.javascript.JSObject
 
 class UdaoCollector(verbose: Boolean = true, tid: String = "") {
 
@@ -99,12 +100,12 @@ class UdaoCollector(verbose: Boolean = true, tid: String = "") {
   }
 
   def exportRuntimeQueryStageBeforeOptimization(
-                                                 plan: SparkPlan,
-                                                 qsMetrics: QSMetrics,
-                                                 snapshot: RunningSnapshot,
-                                                 runtimeOptMeasureUnit: RuntimeOptMeasureUnit,
-                                                 runtimeKnobsDict: Map[String, Array[KnobKV]]
-                                               ): Int = {
+                                                plan: SparkPlan,
+                                                qsMetrics: QSMetrics,
+                                                snapshot: RunningSnapshot,
+                                                runtimeOptMeasureUnit: RuntimeOptMeasureUnit,
+                                                runtimeKnobsDict: Map[String, Array[KnobKV]]
+                                              ): Int = {
     qsCollector.exportRuntimeQueryStageBeforeOptimization(
       plan,
       qsMetrics,
@@ -160,4 +161,40 @@ class UdaoCollector(verbose: Boolean = true, tid: String = "") {
     pretty(render(json))
   }
 
+  def buildJson: JsonAST.JObject = {
+    val lqpMap = lqpCollector.exportMap(sqlEndTimeInMs, sgCollector.getStageIOBytesDict)
+    val sgMap = sgCollector.getStageGroupMap
+    val sgResultsMap = sgCollector.aggregateResults
+
+    val baseJson1: JsonAST.JObject = {
+      ("CompileTimeLQP" -> compileTimeCollector.exposeJson) ~
+        ("RuntimeLQPs" -> lqpMap)
+    }
+    val baseJson2: JsonAST.JObject = {
+      ("SQLStartTimeInMs" -> sqlStartTimeInMs) ~
+        ("SQLEndTimeInMs" -> sqlEndTimeInMs) ~
+        ("Objectives" -> (
+          ("DurationInMs" -> (sqlEndTimeInMs - sqlStartTimeInMs)) ~
+            ("IOBytes" -> sgCollector.aggregateAll().json)
+          ))
+    }
+    val baseJson3: JsonAST.JObject = {
+      if (sgMap.size == qsCollector.getQsIndexMapSize) {
+        val qsMap = qsCollector.getQueryStageMap(sgMap, sgResultsMap)
+        qsMap
+          .map(x => (x._1, x._2.qsOptId, x._2.relevantStages, x._2.table))
+          .toSeq
+          .sortBy(_._1)
+          .foreach { x =>
+            println(s"QueryStageId: ${x._1} \t OptimizationOrder: ${x._2} \t RelevantStages: ${x._3} \t table: ${x._4}")
+          }
+        ("RuntimeQSs" -> qsMap.map(x => (x._1.toString, x._2.json)))
+      }
+      else {
+        JsonAST.JObject()
+      }
+    }
+
+    baseJson1 ~ baseJson2 ~ baseJson3
+  }
 }

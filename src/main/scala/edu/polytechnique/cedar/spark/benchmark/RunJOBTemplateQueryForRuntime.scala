@@ -119,7 +119,7 @@ object RunJOBTemplateQueryForRuntime {
 
     val databaseName = config.databaseName
     val queryLocationHeader: String = config.queryLocationHeader
-
+    spark.sql("show databases;").show()
     spark.sql(s"use $databaseName")
     val source = scala.io.Source.fromFile(
       s"${queryLocationHeader}/${tid}.sql"
@@ -128,12 +128,12 @@ object RunJOBTemplateQueryForRuntime {
       try source.mkString
       finally source.close()
 
-    println(spark.sparkContext.applicationId)
-    println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
+    // println(spark.sparkContext.applicationId)
+    // println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
 
     println(s"run ${queryLocationHeader}/${tid}.sql")
     collector.onCompile(spark, queryContent)
-    spark.sql(queryContent).collect()
+    spark.sql(queryContent).show()
     spark.close()
 
     val xFile = new File(config.extractedPath)

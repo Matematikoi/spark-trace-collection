@@ -9,9 +9,10 @@ import edu.polytechnique.cedar.spark.sql.extensions.{
 }
 import edu.polytechnique.cedar.spark.udao.UdaoClient
 import org.apache.spark.sql.SparkSession
-
+import org.json4s.jackson.JsonMethods.{pretty, render}
 import java.io.PrintWriter
 import java.io.File
+import org.json4s.JsonDSL._
 
 object RunTemplateGeneric {
 
@@ -22,9 +23,9 @@ object RunTemplateGeneric {
           .action { (x, c) => c.copy(databaseName = x) }
           .text("The database in spark to load. Can be tpcds_100, job, etc...")
           .required()
-        opt[String]('t', "templateName")
-          .action { (x, c) => c.copy(templateName = x) }
-          .text("the templateName to run")
+        opt[String]('t', "templateId")
+          .action { (x, c) => c.copy(templateId = x) }
+          .text("the templateId to run")
           .required()
         opt[String]('b', "benchmarkId")
           .action { (x,c) => c.copy(benchmarkId = x)}
@@ -66,7 +67,7 @@ object RunTemplateGeneric {
   }
 
   def run(config: RunTemplateGenericConfig): Unit = {
-    val templateId: String = config.templateName
+    val templateId: String = config.templateId
     val queryId: String = config.queryId
     val collector = new UdaoCollector(config.verbose, templateId)
     val udaoClient: Option[UdaoClient] =
@@ -78,7 +79,7 @@ object RunTemplateGeneric {
       SparkSession
         .builder()
         .appName(
-          s"${config.benchmarkId}_${config.templateName}-${config.queryId}"
+          s"${config.benchmarkId}_${config.templateId}-${config.queryId}"
         )
         .config("spark.master", "local[*]")
         .config("spark.default.parallelism", "40")
@@ -149,7 +150,11 @@ object RunTemplateGeneric {
     val writer = new PrintWriter(
       s"${config.traceCollectionPath}/${spark.sparkContext.appName}_${spark.sparkContext.applicationId}.json"
     )
-    val jsonString = collector.dump2String
+    val baseJson = collector.buildJson
+    val metadata = config.getJsonMetadata
+    
+
+    val jsonString = pretty(render(baseJson ~ metadata))
     writer.write(jsonString)
     writer.close()
   }
