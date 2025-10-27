@@ -26,7 +26,6 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.json4s.JsonAST
 import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods.{pretty, render}
-import netscape.javascript.JSObject
 
 class UdaoCollector(verbose: Boolean = true, tid: String = "") {
 
