@@ -11,6 +11,14 @@ case class IOBytesUnit(
     shuffleWritten: Long
 ) extends MyUnit {
 
+  def +(o: IOBytesUnit): IOBytesUnit =
+    IOBytesUnit(
+      inputRead + o.inputRead,
+      inputWritten + o.inputWritten,
+      shuffleRead + o.shuffleRead,
+      shuffleWritten + o.shuffleWritten
+    )
+
   val json: JsonAST.JObject =
     ("Total" -> (inputRead + inputWritten + shuffleRead + shuffleWritten)) ~
       ("Details" -> (
@@ -21,3 +29,9 @@ case class IOBytesUnit(
       ))
   override def toJson: JValue = render(json)
 }
+
+object IOBytesUnit {
+  /** Neutral element for addition (all counters zero). */
+  val zero: IOBytesUnit = IOBytesUnit(0L, 0L, 0L, 0L)
+}
+
