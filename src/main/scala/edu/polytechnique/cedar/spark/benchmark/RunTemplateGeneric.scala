@@ -136,7 +136,8 @@ object RunTemplateGeneric {
       try source.mkString
       finally source.close()
 
-    println(spark.sparkContext.applicationId)
+    val appId: String = spark.sparkContext.applicationId
+    println(appId)
     // println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
 
     println(s"run ${queryPath}")
@@ -148,12 +149,11 @@ object RunTemplateGeneric {
     xFile.mkdirs()
 
     val writer = new PrintWriter(
-      s"${config.traceCollectionPath}/${spark.sparkContext.appName}_${spark.sparkContext.applicationId}.json"
+      s"${config.traceCollectionPath}/${spark.sparkContext.appName}_${appId}.json"
     )
     val baseJson = collector.buildJson
-    val metadata = config.getJsonMetadata
+    val metadata = config.getJsonMetadata(appId)
     
-
     val jsonString = pretty(render(baseJson ~ metadata))
     writer.write(jsonString)
     writer.close()

@@ -15,9 +15,10 @@ case class RunTemplateGenericConfig(
     runtimeSolverHost: String = "localhost",
     runtimeSolverPort: Int = 12345
 ) {
-    def getJsonMetadata: JObject =
+    def getJsonMetadata(appId: String): JObject =
     ("Metadata" ->
         (("QueryId"    -> queryId) ~
-        ("TemplateId" -> templateId))
+        ("TemplateId" -> templateId) ~
+        ("AppId"      -> appId))
     )
 }
