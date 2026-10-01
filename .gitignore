@@ -22,3 +22,9 @@ benchmark-res/dataset-gen
 outs
 *.bak
 benchmark-res/libs
+
+# lqp-server spike
+spike/catalog
+derby.log
+spike/server-catalog
+__pycache__

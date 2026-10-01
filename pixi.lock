@@ -1,0 +1,38 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/openjdk-8.0.472-h4d9bdce_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/sbt-1.13.0-hc364b38_0.conda
+      osx-arm64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openjdk-8.0.472-hc919400_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/sbt-1.13.0-hc364b38_0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/openjdk-8.0.472-h4d9bdce_0.conda
+  sha256: e59d670ce17e1b7aefd336f183690a1782d613070b1cf00bfb2ec66761651cc8
+  md5: 814b49910a4cd9da2a1f31144386a309
+  license: GPL-2.0-or-later WITH Classpath-exception-2.0
+  license_family: GPL
+  size: 92636437
+  timestamp: 1765833232140
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/openjdk-8.0.472-hc919400_0.conda
+  sha256: 6ae1d1aa5dab53c711c162b6ee08c48348429e3a0ae8ad6f18707e95616b9932
+  md5: 195257505302c6a356d74d0853de4e79
+  depends:
+  - __osx >=11.0
+  license: GPL-2.0-or-later WITH Classpath-exception-2.0
+  license_family: GPL
+  size: 38167778
+  timestamp: 1765833447459
+- conda: https://conda.anaconda.org/conda-forge/noarch/sbt-1.13.0-hc364b38_0.conda
+  sha256: fe28f00e58f15793045a053fd8a797c67f26a28999492bb04cb94a554503ae2c
+  md5: 9ee8d4bee6878ad3d2e4090036ce5b0f
+  depends:
+  - openjdk >=8
+  license: Apache-2.0
+  license_family: APACHE
+  size: 3460412
+  timestamp: 1787671423269
