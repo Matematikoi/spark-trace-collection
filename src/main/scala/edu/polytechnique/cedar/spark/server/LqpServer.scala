@@ -25,8 +25,12 @@ object LqpServer {
 
   case class Config(
       port: Int = 8080,
-      resetExprIds: Boolean = true
+      resetExprIds: Boolean = true,
+      timeoutMs: Long = 10000
   )
+
+  class PlanningTimeoutException(timeoutMs: Long)
+      extends RuntimeException(s"planning took longer than $timeoutMs ms")
 
   private implicit val formats: DefaultFormats.type = DefaultFormats
 
@@ -38,6 +42,9 @@ object LqpServer {
       opt[Boolean]("resetExprIds")
         .action((x, c) => c.copy(resetExprIds = x))
         .text("reset expression ids before each request so plans match a fresh JVM, default true")
+      opt[Long]("timeoutMs")
+        .action((x, c) => c.copy(timeoutMs = x))
+        .text("planning time limit per request in ms, 0 = none, default 10000")
     }
     parser.parse(args, Config()) match {
       case Some(config) => run(config)
@@ -94,9 +101,11 @@ object LqpServer {
         case _ =>
       }
 
-      if (config.resetExprIds) resetExprIds()
       val start = System.nanoTime()
-      val compileTimeLqp = CompileTimeCollector.compile(session, sql)
+      val compileTimeLqp = withTimeout(spark, config.timeoutMs) {
+        if (config.resetExprIds) resetExprIds()
+        CompileTimeCollector.compile(session, sql)
+      }
       val elapsedMs = (System.nanoTime() - start) / 1e6
 
       val metadata = RunTemplateGenericConfig(queryId = queryId, templateId = templateId)
@@ -104,6 +113,9 @@ object LqpServer {
       exchange.getResponseHeaders.add("X-Planning-Time-Ms", f"$elapsedMs%.1f")
       respond(exchange, 200, pretty(render(("CompileTimeLQP" -> compileTimeLqp) ~ metadata)))
     } catch {
+      case e: PlanningTimeoutException =>
+        println(s"timeout: ${e.getMessage}")
+        respond(exchange, 504, error(e.getMessage))
       case e @ (_: IllegalArgumentException | _: ParseException | _: AnalysisException |
           _: org.json4s.ParserUtil.ParseException) =>
         respond(exchange, 400, error(e.getMessage))
@@ -125,6 +137,42 @@ object LqpServer {
   }
 
   private def resetExprIds(): Unit = exprIdCounter.set(0)
+
+  private val requestCounter = new AtomicLong(0)
+
+  // Plans on its own thread so a request can give up after timeoutMs. Planning can
+  // run Spark jobs (listing the files of the partitions left after pruning); they
+  // run in a per-request job group that is cancelled on timeout, otherwise they
+  // keep the executors busy and every later request queues behind them. Catalyst
+  // ignores interrupts, so a planner still running after a short grace period is
+  // stopped: left running, it would keep drawing expression ids and break
+  // resetExprIds for the requests after it.
+  private def withTimeout[T](spark: SparkSession, timeoutMs: Long)(body: => T): T = {
+    if (timeoutMs <= 0) return body
+    val jobGroup = s"lqp-${requestCounter.incrementAndGet()}"
+    var result: Either[Throwable, T] = null
+    val worker = new Thread(
+      () => {
+        spark.sparkContext.setJobGroup(jobGroup, "lqp planning", interruptOnCancel = true)
+        result = try Right(body) catch { case t: Throwable => Left(t) }
+      },
+      "lqp-planner"
+    )
+    worker.setDaemon(true)
+    worker.start()
+    worker.join(timeoutMs)
+    if (worker.isAlive) {
+      spark.sparkContext.cancelJobGroup(jobGroup)
+      worker.interrupt()
+      worker.join(1000)
+      if (worker.isAlive) {
+        worker.stop()
+        worker.join()
+      }
+      throw new PlanningTimeoutException(timeoutMs)
+    }
+    result.fold(t => throw t, identity)
+  }
 
   private def optString(v: JValue): Option[String] = v match {
     case JString(s)       => Some(s)
